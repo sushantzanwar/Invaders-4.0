@@ -303,13 +303,14 @@ export default function GlideSelect({
     if (!el || !root) return;
     const r = root.getBoundingClientRect();
     const need = el.offsetHeight + MENU_GAP;
-    setSide(
-      placement === 'bottom' && r.bottom + need > window.innerHeight
-        ? 'top'
-        : placement === 'top' && r.top - need < 0
-        ? 'bottom'
-        : placement
-    );
+    if (placement === 'bottom') {
+      // Stay bottom unless viewport has virtually no room below and plenty above
+      setSide(
+        r.bottom + need > window.innerHeight && r.top > need ? 'top' : 'bottom'
+      );
+    } else {
+      setSide(r.top - need < 0 && window.innerHeight - r.bottom > need ? 'bottom' : 'top');
+    }
     el.style.transitionDuration = instant.current ? '0ms' : '';
     el.dataset.state = 'closed';
     void el.offsetHeight;

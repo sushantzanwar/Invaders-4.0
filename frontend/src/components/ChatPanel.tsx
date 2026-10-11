@@ -204,7 +204,7 @@ export default function ChatPanel({
           size="sm"
           radius={10}
           menuWidth={210}
-          placement="top"
+          placement="bottom"
           align="left"
           popDuration={180}
           glideDuration={220}
@@ -228,7 +228,10 @@ export default function ChatPanel({
             return (
               <div style={styles.sliderFlyout}>
                 <div style={styles.flyoutHeader}>
-                  <span style={styles.flyoutTitle}>{targetModel.name} Parameters</span>
+                  <div style={styles.flyoutHeaderLeft}>
+                    <span style={styles.flyoutTitle}>{targetModel.name}</span>
+                    <span style={styles.flyoutSubtitle}>Parameters</span>
+                  </div>
                   <button
                     type="button"
                     style={styles.fullEditBtn}
@@ -710,12 +713,12 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'not-allowed',
   },
   sliderFlyout: {
-    width: 280,
+    width: 290,
     background: '#1e1f20',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: 14,
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-    padding: '12px 16px',
+    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.12)',
+    padding: '14px 16px',
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
@@ -724,33 +727,53 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-    paddingBottom: 8,
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    paddingBottom: 10,
+    gap: 8,
+  },
+  flyoutHeaderLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
   },
   flyoutTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 600,
-    color: '#e3e3e3',
+    color: '#f0f0f0',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  flyoutSubtitle: {
+    fontSize: 10,
+    color: '#9aa0a6',
+    fontWeight: 400,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
   },
   fullEditBtn: {
-    background: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(138, 180, 248, 0.1)',
+    border: '1px solid rgba(138, 180, 248, 0.3)',
     color: '#8ab4f8',
-    borderRadius: 6,
-    fontSize: 10,
+    borderRadius: 7,
+    fontSize: 11,
     fontWeight: 500,
-    padding: '3px 7px',
+    padding: '4px 9px',
     cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    flexShrink: 0,
+    transition: 'all 0.15s ease',
   },
   slidersList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
+    gap: 12,
   },
   sliderGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 6,
   },
   sliderLabelRow: {
     display: 'flex',
@@ -760,21 +783,24 @@ const styles: Record<string, React.CSSProperties> = {
   paramLabel: {
     fontSize: 11,
     color: '#9aa0a6',
+    fontWeight: 500,
   },
   paramVal: {
     fontSize: 11,
     fontWeight: 600,
     color: '#8ab4f8',
+    fontVariantNumeric: 'tabular-nums',
   },
   flyoutFooter: {
-    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
     paddingTop: 8,
     display: 'flex',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   saveStatus: {
     fontSize: 10,
     color: '#34a853',
-    fontStyle: 'italic',
+    fontWeight: 500,
   },
 };
