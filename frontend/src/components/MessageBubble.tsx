@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ChatMessage } from '../types';
 
 interface Props {
@@ -7,6 +7,26 @@ interface Props {
 
 export default function MessageBubble({ message }: Props) {
   const { role, content, modelName, latencyMs, timestamp } = message;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(content);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = content;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (err) {
+      console.warn('Copy failed:', err);
+    }
+  };
 
   const isUser = role === 'user';
   const isError = role === 'error';
@@ -74,9 +94,40 @@ export default function MessageBubble({ message }: Props) {
           </p>
         </div>
 
-        <p style={{ ...styles.time, textAlign: isUser ? 'right' : 'left' }}>
-          {timeStr}
-        </p>
+        {/* Footer row: copy button & timestamp */}
+        <div
+          style={{
+            ...styles.footerRow,
+            justifyContent: isUser ? 'flex-end' : 'flex-start',
+            flexDirection: isUser ? 'row-reverse' : 'row',
+          }}
+        >
+          <button
+            type="button"
+            className="msg-copy-btn"
+            style={{
+              ...styles.copyBtn,
+              ...(copied ? styles.copyBtnSuccess : {}),
+            }}
+            onClick={handleCopy}
+            title={copied ? 'Copied to clipboard!' : 'Copy to clipboard'}
+            aria-label="Copy text"
+          >
+            {copied ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            )}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+
+          <span style={styles.time}>{timeStr}</span>
+        </div>
       </div>
 
       {isUser && (
@@ -206,12 +257,35 @@ const styles: Record<string, React.CSSProperties> = {
   aiText: {
     color: '#e3e3e3',
   },
-  time: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.2)',
+  footerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
     marginTop: 4,
     paddingLeft: 4,
     paddingRight: 4,
+  },
+  copyBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    background: 'transparent',
+    border: 'none',
+    color: '#9aa0a6',
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: '2px 6px',
+    borderRadius: 6,
+    transition: 'all 0.15s ease',
+    opacity: 0.75,
+  },
+  copyBtnSuccess: {
+    color: 'var(--green)',
+    opacity: 1,
+  },
+  time: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
   },
   errorWrapper: {
     padding: '6px 28px',

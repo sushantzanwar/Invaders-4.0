@@ -249,3 +249,13 @@ textarea::placeholder {
 textarea:focus {
   outline: none;
 }
+
+/* ── Message Copy Button ────────────────────────────────── */
+.msg-copy-btn {
+  user-select: none;
+}
+.msg-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e3e3e3 !important;
+  opacity: 1 !important;
+}
