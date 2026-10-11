@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, Decision, ModelInfo } from '../types';
-import { postInfer } from '../api';
+import { postInfer, patchModel } from '../api';
 import MessageBubble from './MessageBubble';
 import CrystalizedBall from './CrystalizedBall';
 import LatticeLoader from './LatticeLoader';
 import GlideSelect from './GlideSelect';
+import ModelConfigModal from './ModelConfigModal';
 
 interface ChatPanelProps {
   models: ModelInfo[];
@@ -23,6 +24,7 @@ function uid() {
 
 export default function ChatPanel({
   models,
+  onModelsChange,
   onDecision,
   inspectorOpen,
   onToggleInspector,
@@ -33,7 +35,34 @@ export default function ChatPanel({
   const [loading, setLoading] = useState(false);
   const [lastUsedModel, setLastUsedModel] = useState<string | undefined>();
   const [selectedModelKey, setSelectedModelKey] = useState<string>('auto');
+  const [editingModel, setEditingModel] = useState<ModelInfo | null>(null);
+  const [localSaving, setLocalSaving] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const handleQuickParamChange = async (
+    model: ModelInfo,
+    field: string,
+    val: number
+  ) => {
+    const updated = { ...model, [field]: val };
+    onModelsChange?.(
+      models.map((m) => (m.model_key === updated.model_key ? updated : m))
+    );
+    try {
+      setLocalSaving(true);
+      await patchModel(model.model_key, { [field]: val });
+    } catch (err) {
+      console.warn('Quick patch failed:', err);
+    } finally {
+      setLocalSaving(false);
+    }
+  };
+
+  const handleModelSaved = (updated: ModelInfo) => {
+    onModelsChange?.(
+      models.map((m) => (m.model_key === updated.model_key ? updated : m))
+    );
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -180,6 +209,133 @@ export default function ChatPanel({
           popDuration={180}
           glideDuration={220}
           rememberPosition
+          renderSidePanel={(activeOpt) => {
+            if (!activeOpt) return null;
+            if (activeOpt.value === 'auto') {
+              return (
+                <div style={styles.sliderFlyout}>
+                  <div style={styles.flyoutHeader}>
+                    <span style={styles.flyoutTitle}>⚡ Auto Router</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9aa0a6', lineHeight: 1.5 }}>
+                    Autonomous engine dynamically chooses the optimal model by evaluating prompt complexity, context window, latency, and token cost.
+                  </div>
+                </div>
+              );
+            }
+            const targetModel = models.find((m) => m.model_key === activeOpt.value);
+            if (!targetModel) return null;
+            return (
+              <div style={styles.sliderFlyout}>
+                <div style={styles.flyoutHeader}>
+                  <span style={styles.flyoutTitle}>{targetModel.name} Parameters</span>
+                  <button
+                    type="button"
+                    style={styles.fullEditBtn}
+                    onClick={() => setEditingModel(targetModel)}
+                  >
+                    Full Config ↗
+                  </button>
+                </div>
+
+                <div style={styles.slidersList}>
+                  {/* Slider 1: Max Latency */}
+                  <div style={styles.sliderGroup}>
+                    <div style={styles.sliderLabelRow}>
+                      <span style={styles.paramLabel}>Max Latency</span>
+                      <span style={styles.paramVal}>{targetModel.max_latency_ms}ms</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={200}
+                      max={12000}
+                      step={100}
+                      value={targetModel.max_latency_ms}
+                      onChange={(e) =>
+                        handleQuickParamChange(
+                          targetModel,
+                          'max_latency_ms',
+                          Number(e.target.value)
+                        )
+                      }
+                    />
+                  </div>
+
+                  {/* Slider 2: Max Cost / Token */}
+                  <div style={styles.sliderGroup}>
+                    <div style={styles.sliderLabelRow}>
+                      <span style={styles.paramLabel}>Max Cost / Token</span>
+                      <span style={styles.paramVal}>${(targetModel.cost_per_1k_tokens / 1000).toFixed(5)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={0.001}
+                      step={0.00005}
+                      value={targetModel.cost_per_1k_tokens / 1000}
+                      onChange={(e) =>
+                        handleQuickParamChange(
+                          targetModel,
+                          'cost_per_1k_tokens',
+                          Number(e.target.value) * 1000
+                        )
+                      }
+                    />
+                  </div>
+
+                  {/* Slider 3: Min Capability */}
+                  <div style={styles.sliderGroup}>
+                    <div style={styles.sliderLabelRow}>
+                      <span style={styles.paramLabel}>Min Capability</span>
+                      <span style={styles.paramVal}>{targetModel.capability_score}/10</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      step={0.1}
+                      value={targetModel.capability_score}
+                      onChange={(e) =>
+                        handleQuickParamChange(
+                          targetModel,
+                          'capability_score',
+                          Number(e.target.value)
+                        )
+                      }
+                    />
+                  </div>
+
+                  {/* Slider 4: Min Context */}
+                  <div style={styles.sliderGroup}>
+                    <div style={styles.sliderLabelRow}>
+                      <span style={styles.paramLabel}>Min Context</span>
+                      <span style={styles.paramVal}>{Math.round(targetModel.context_length / 1024)}K</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={4096}
+                      max={131072}
+                      step={4096}
+                      value={targetModel.context_length}
+                      onChange={(e) =>
+                        handleQuickParamChange(
+                          targetModel,
+                          'context_length',
+                          Number(e.target.value)
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.flyoutFooter}>
+                  <span style={styles.saveStatus}>
+                    {localSaving ? 'Saving…' : '● Changes synced live'}
+                  </span>
+                </div>
+              </div>
+            );
+          }}
         />
       </div>
 
@@ -332,6 +488,15 @@ export default function ChatPanel({
         <div style={styles.bottomInputWrap}>
           {renderInputCapsule()}
         </div>
+      )}
+
+      {/* Full Modal if opened */}
+      {editingModel && (
+        <ModelConfigModal
+          model={editingModel}
+          onClose={() => setEditingModel(null)}
+          onSaveSuccess={handleModelSaved}
+        />
       )}
     </div>
   );
@@ -543,5 +708,73 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(255, 255, 255, 0.08)',
     color: 'rgba(255, 255, 255, 0.2)',
     cursor: 'not-allowed',
+  },
+  sliderFlyout: {
+    width: 280,
+    background: '#1e1f20',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  flyoutHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+    paddingBottom: 8,
+  },
+  flyoutTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#e3e3e3',
+  },
+  fullEditBtn: {
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    color: '#8ab4f8',
+    borderRadius: 6,
+    fontSize: 10,
+    fontWeight: 500,
+    padding: '3px 7px',
+    cursor: 'pointer',
+  },
+  slidersList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  sliderGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  sliderLabelRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paramLabel: {
+    fontSize: 11,
+    color: '#9aa0a6',
+  },
+  paramVal: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#8ab4f8',
+  },
+  flyoutFooter: {
+    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+    paddingTop: 8,
+    display: 'flex',
+    justifyContent: 'flex-end',
+  },
+  saveStatus: {
+    fontSize: 10,
+    color: '#34a853',
+    fontStyle: 'italic',
   },
 };

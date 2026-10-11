@@ -33,6 +33,7 @@ export interface GlideSelectProps {
   ariaLabel?: string;
   className?: string;
   style?: React.CSSProperties;
+  renderSidePanel?: (activeOption: GlideSelectOptionObj | null) => React.ReactNode;
 }
 
 const SIZES = {
@@ -272,6 +273,7 @@ export default function GlideSelect({
   ariaLabel = 'Select model',
   className = '',
   style,
+  renderSidePanel,
 }: GlideSelectProps) {
   const items = options.map(norm);
   const [inner, setInner] = useState(defaultValue ?? '');
@@ -526,51 +528,76 @@ export default function GlideSelect({
 
       {phase !== 'closed' ? (
         <div
-          ref={menuRef}
-          className="gs-menu"
-          data-state="open"
-          data-side={side}
-          data-align={align}
+          style={{
+            position: 'absolute',
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            bottom: side === 'top' ? 'calc(100% + 6px)' : 'auto',
+            top: side === 'bottom' ? 'calc(100% + 6px)' : 'auto',
+            left: align === 'left' ? 0 : 'auto',
+            right: align === 'right' ? 0 : 'auto',
+          }}
         >
           <div
-            id={`${id}-list`}
-            role="listbox"
-            aria-label={ariaLabel}
-            className="gs-list"
-            data-live={active !== null ? '' : undefined}
-            onPointerOver={onListOver}
-            onPointerLeave={() => {
-              if (!scrub.current && !rememberPosition) setActive(null);
+            ref={menuRef}
+            className="gs-menu"
+            data-state="open"
+            data-side={side}
+            data-align={align}
+            style={{
+              position: 'relative',
+              top: 'auto',
+              bottom: 'auto',
+              left: 'auto',
+              right: 'auto',
             }}
-            onPointerDown={onListDown}
-            onPointerMove={onListMove}
-            onPointerUp={onListUp}
-            onPointerCancel={onListUp}
           >
-            <span ref={pillRef} className="gs-pill" aria-hidden="true" />
-            {items.map((it, i) => (
-              <div
-                key={it.value}
-                id={`${id}-${i}`}
-                role="option"
-                aria-selected={i === selected}
-                data-index={i}
-                className="gs-row"
-              >
-                <span className="gs-row-label">{it.label}</span>
-                {showTags && it.tag ? (
-                  <span className="gs-row-tag">{it.tag}</span>
-                ) : null}
-                <span
-                  className="gs-row-check"
-                  data-on={i === selected ? '' : undefined}
-                  aria-hidden="true"
+            <div
+              id={`${id}-list`}
+              role="listbox"
+              aria-label={ariaLabel}
+              className="gs-list"
+              data-live={active !== null ? '' : undefined}
+              onPointerOver={onListOver}
+              onPointerLeave={() => {
+                if (!scrub.current && !rememberPosition) setActive(null);
+              }}
+              onPointerDown={onListDown}
+              onPointerMove={onListMove}
+              onPointerUp={onListUp}
+              onPointerCancel={onListUp}
+            >
+              <span ref={pillRef} className="gs-pill" aria-hidden="true" />
+              {items.map((it, i) => (
+                <div
+                  key={it.value}
+                  id={`${id}-${i}`}
+                  role="option"
+                  aria-selected={i === selected}
+                  data-index={i}
+                  className="gs-row"
                 >
-                  <HugeiconsIcon icon={Tick02Icon} size={13} strokeWidth={2.5} />
-                </span>
-              </div>
-            ))}
+                  <span className="gs-row-label">{it.label}</span>
+                  {showTags && it.tag ? (
+                    <span className="gs-row-tag">{it.tag}</span>
+                  ) : null}
+                  <span
+                    className="gs-row-check"
+                    data-on={i === selected ? '' : undefined}
+                    aria-hidden="true"
+                  >
+                    <HugeiconsIcon icon={Tick02Icon} size={13} strokeWidth={2.5} />
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+
+          {renderSidePanel?.(
+            active !== null ? items[active] : selected >= 0 ? items[selected] : items[0]
+          )}
         </div>
       ) : null}
     </div>
