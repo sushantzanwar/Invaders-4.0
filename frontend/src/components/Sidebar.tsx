@@ -197,8 +197,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   logoWrap: {
-    width: 36,
-    height: 36,
+    width: 52,
+    height: 52,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -209,7 +209,7 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: 'contain',
   },
   brandTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 600,
     color: '#e3e3e3',
     letterSpacing: '-0.01em',

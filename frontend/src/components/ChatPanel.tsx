@@ -2,13 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, Decision, ModelInfo } from '../types';
 import { postInfer } from '../api';
 import MessageBubble from './MessageBubble';
-import ModelsAvailablePopup from './ModelsAvailablePopup';
 import CrystalizedBall from './CrystalizedBall';
 import LatticeLoader from './LatticeLoader';
+import GlideSelect from './GlideSelect';
 
 interface ChatPanelProps {
   models: ModelInfo[];
-  onModelsChange: (models: ModelInfo[]) => void;
+  onModelsChange?: (models: ModelInfo[]) => void;
   onDecision: (decision: Decision) => void;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
@@ -23,7 +23,6 @@ function uid() {
 
 export default function ChatPanel({
   models,
-  onModelsChange,
   onDecision,
   inspectorOpen,
   onToggleInspector,
@@ -33,6 +32,7 @@ export default function ChatPanel({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [lastUsedModel, setLastUsedModel] = useState<string | undefined>();
+  const [selectedModelKey, setSelectedModelKey] = useState<string>('auto');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +64,8 @@ export default function ChatPanel({
     setLoading(true);
 
     try {
-      const data = await postInfer(text, {} as any);
+      const constraints = selectedModelKey !== 'auto' ? { preferred_model: selectedModelKey } : {};
+      const data = await postInfer(text, constraints as any);
 
       if (data.decision) {
         onDecision(data.decision);
@@ -148,12 +149,37 @@ export default function ChatPanel({
         }}
       />
 
-      {/* Model Selector Pill (Dialog Box 01 & 02) */}
+      {/* Model Selector in Chat Box using GlideSelect */}
       <div style={styles.modelPillContainer}>
-        <ModelsAvailablePopup
-          models={models}
-          onModelsChange={onModelsChange}
-          selectedModelName={lastUsedModel}
+        <GlideSelect
+          options={[
+            {
+              value: 'auto',
+              label: lastUsedModel ? `Auto (${lastUsedModel})` : 'Auto Router',
+              tag: 'Smart',
+            },
+            ...models.map((m) => ({
+              value: m.model_key,
+              label: m.name,
+              tag: `${m.avg_latency_ms}ms`,
+            })),
+          ]}
+          value={selectedModelKey}
+          onChange={(val) => setSelectedModelKey(val)}
+          ariaLabel="Model Selector"
+          showTags
+          accentColor="#8ab4f8"
+          surfaceColor="#27272a"
+          highlightColor="#3f3f46"
+          textColor="#f5f5f5"
+          size="sm"
+          radius={10}
+          menuWidth={210}
+          placement="top"
+          align="left"
+          popDuration={180}
+          glideDuration={220}
+          rememberPosition
         />
       </div>
 
@@ -350,7 +376,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'opacity 0.15s ease',
   },
   navLogoImg: {
-    height: 36,
+    height: 48,
     width: 'auto',
     objectFit: 'contain',
     display: 'block',
