@@ -4,6 +4,7 @@ import { fetchModels } from './api';
 import ChatPanel from './components/ChatPanel';
 import InspectorPanel from './components/InspectorPanel';
 import Sidebar from './components/Sidebar';
+import GradientWaves from './components/GradientWaves';
 import './styles/global.css';
 
 const POLL_INTERVAL_MS = 6000;
@@ -83,6 +84,32 @@ export default function App() {
 
   return (
     <div style={styles.root}>
+      {/* Background Gradient Waves from React Bits */}
+      <div style={styles.wavesBg}>
+        <GradientWaves
+          horizonColor="#5227FF"
+          waveColor="#FF9FFC"
+          crestColor="#FFFFFF"
+          speed={0.4}
+          amplitude={2.5}
+          waveScale={0.6}
+          waveRatio={0.9}
+          swell={35}
+          turbulence={15.5}
+          tilt={1.11}
+          zoom={1.0}
+          height={5.5}
+          fogDepth={15}
+          detail="medium"
+          brightness={1.0}
+          opacity={0.5}
+          mouseInteraction={true}
+          parallaxStrength={0.5}
+          grain={true}
+          grainIntensity={0.05}
+        />
+      </div>
+
       {/* Sidebar Drawer */}
       <Sidebar
         models={models}
@@ -143,12 +170,23 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100vw',
     overflow: 'hidden',
     position: 'relative',
+    background: '#0b0c10',
+  },
+  wavesBg: {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+    pointerEvents: 'none',
   },
   layout: {
     display: 'flex',
     flex: 1,
     height: '100%',
     overflow: 'hidden',
+    position: 'relative',
+    zIndex: 1,
   },
   chatPane: {
     flex: 1,
@@ -156,6 +194,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     minWidth: 0,
     position: 'relative',
+    background: 'transparent',
   },
   sliderResizer: {
     width: '6px',
