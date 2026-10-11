@@ -1,17 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ModelInfo, Decision } from './types';
 import { fetchModels } from './api';
 import ChatPanel from './components/ChatPanel';
 import InspectorPanel from './components/InspectorPanel';
+import Sidebar from './components/Sidebar';
+import './styles/global.css';
 
 const POLL_INTERVAL_MS = 6000;
+const DEFAULT_INSPECTOR_WIDTH = 390;
+const MIN_INSPECTOR_WIDTH = 290;
+const MAX_INSPECTOR_WIDTH = 680;
 
 export default function App() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [lastDecision, setLastDecision] = useState<Decision | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatKey, setChatKey] = useState(0);
 
-  // Load models from backend registry on startup
+  const isDraggingRef = useRef(false);
+
   const loadModels = useCallback(() => {
     fetchModels()
       .then(setModels)
@@ -26,46 +35,102 @@ export default function App() {
     return () => clearInterval(id);
   }, [loadModels]);
 
-  // Handle new decision (from chat)
-  const handleDecision = useCallback((decision: Decision) => {
-    setLastDecision(decision);
-    loadModels();
-  }, [loadModels]);
+  const handleDecision = useCallback(
+    (decision: Decision) => {
+      setLastDecision(decision);
+      loadModels();
+    },
+    [loadModels]
+  );
+
+  const handleNewChat = useCallback(() => {
+    setChatKey((k) => k + 1);
+    setLastDecision(null);
+  }, []);
+
+  // Draggable slider bar to resize analysis tab width
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= MIN_INSPECTOR_WIDTH && newWidth <= MAX_INSPECTOR_WIDTH) {
+        setInspectorWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   return (
     <div style={styles.root}>
-      {/* Left Chat Panel (Prompt bar with Models available popup) */}
-      <div
-        style={{
-          ...styles.chatPane,
-          flex: inspectorOpen ? '0 0 62%' : '1',
-          transition: 'flex 0.2s ease',
-        }}
-      >
-        <ChatPanel
-          models={models}
-          onModelsChange={setModels}
-          onDecision={handleDecision}
-          inspectorOpen={inspectorOpen}
-          onToggleInspector={() => setInspectorOpen((v) => !v)}
-        />
-      </div>
+      {/* Sidebar Drawer */}
+      <Sidebar
+        models={models}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onNewChat={handleNewChat}
+      />
 
-      {/* Right Inspector Panel (Decision & Tokens Available Graphical Chart) */}
-      <div
-        style={{
-          ...styles.inspectorPane,
-          width: inspectorOpen ? '38%' : '0',
-          overflow: inspectorOpen ? 'visible' : 'hidden',
-          opacity: inspectorOpen ? 1 : 0,
-          transition: 'width 0.2s ease, opacity 0.15s ease',
-          flexShrink: 0,
-        }}
-      >
-        <InspectorPanel
-          models={models}
-          lastDecision={lastDecision}
-        />
+      {/* Main Layout */}
+      <div style={styles.layout}>
+        {/* Chat Panel */}
+        <div style={styles.chatPane}>
+          <ChatPanel
+            key={chatKey}
+            models={models}
+            onModelsChange={setModels}
+            onDecision={handleDecision}
+            inspectorOpen={inspectorOpen}
+            onToggleInspector={() => setInspectorOpen((v) => !v)}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onResetChat={handleNewChat}
+          />
+        </div>
+
+        {/* Draggable Slider Bar (Resizer Handle for Analysis Tab) */}
+        {inspectorOpen && (
+          <div
+            style={styles.sliderResizer}
+            onMouseDown={handleMouseDown}
+            onDoubleClick={() => setInspectorWidth(DEFAULT_INSPECTOR_WIDTH)}
+            title="Drag slider bar to resize analysis tab (Double-click to reset)"
+          >
+            <div style={styles.sliderGripLine} />
+          </div>
+        )}
+
+        {/* Inspector / Analysis Panel */}
+        <div
+          style={{
+            ...styles.inspectorPane,
+            width: inspectorOpen ? `${inspectorWidth}px` : '0px',
+            overflow: inspectorOpen ? 'visible' : 'hidden',
+            opacity: inspectorOpen ? 1 : 0,
+            transition: isDraggingRef.current ? 'none' : 'width 0.18s ease, opacity 0.15s ease',
+          }}
+        >
+          <InspectorPanel models={models} lastDecision={lastDecision} />
+        </div>
       </div>
     </div>
   );
@@ -77,16 +142,43 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100vh',
     width: '100vw',
     overflow: 'hidden',
-    background: '#ffffff',
+    position: 'relative',
+  },
+  layout: {
+    display: 'flex',
+    flex: 1,
+    height: '100%',
+    overflow: 'hidden',
   },
   chatPane: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     minWidth: 0,
     position: 'relative',
   },
+  sliderResizer: {
+    width: '6px',
+    cursor: 'col-resize',
+    background: 'rgba(255, 255, 255, 0.04)',
+    borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.15s ease',
+    zIndex: 20,
+    flexShrink: 0,
+  },
+  sliderGripLine: {
+    width: '2px',
+    height: '28px',
+    borderRadius: '1px',
+    background: 'rgba(255, 255, 255, 0.25)',
+  },
   inspectorPane: {
     height: '100%',
     minHeight: 0,
+    flexShrink: 0,
   },
 };

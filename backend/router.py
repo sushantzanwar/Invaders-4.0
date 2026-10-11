@@ -80,12 +80,12 @@ def _analyze_complexity(prompt: str) -> dict:
     elif final_score >= 3.0:
         label = "MODERATE"
         inferred_cap = 4.0
-        inferred_max_latency = 4000
+        inferred_max_latency = 5000
         pref = "balanced"
     else:
         label = "SIMPLE"
         inferred_cap = 2.0
-        inferred_max_latency = 3000
+        inferred_max_latency = 4000
         pref = "lowest_latency"
 
     return {

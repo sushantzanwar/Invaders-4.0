@@ -3,6 +3,7 @@ import type { ChatMessage, Decision, ModelInfo } from '../types';
 import { postInfer } from '../api';
 import MessageBubble from './MessageBubble';
 import ModelsAvailablePopup from './ModelsAvailablePopup';
+import CrystalizedBall from './CrystalizedBall';
 
 interface ChatPanelProps {
   models: ModelInfo[];
@@ -10,6 +11,8 @@ interface ChatPanelProps {
   onDecision: (decision: Decision) => void;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
+  onOpenSidebar: () => void;
+  onResetChat?: () => void;
 }
 
 let msgCounter = 0;
@@ -23,12 +26,15 @@ export default function ChatPanel({
   onDecision,
   inspectorOpen,
   onToggleInspector,
+  onOpenSidebar,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lastUsedModel, setLastUsedModel] = useState<string | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,8 +63,6 @@ export default function ChatPanel({
     setLoading(true);
 
     try {
-      // Model selection is completely decided by backend server as per the user prompt
-      // and the manipulated features of models configured by judges.
       const data = await postInfer(text, {} as any);
 
       if (data.decision) {
@@ -69,17 +73,20 @@ export default function ChatPanel({
         const errorMsg: ChatMessage = {
           id: uid(),
           role: 'error',
-          content: `❌ NO VALID MODEL: ${data.message || data.error || 'No available model satisfies the prompt requirements.'}`,
+          content: `No Valid Model: ${data.message || data.error || 'No available model satisfies the prompt constraints.'}`,
           decision: data.decision,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMsg]);
       } else {
+        const modelLabel = data.model_name || data.model_used;
+        setLastUsedModel(modelLabel);
+
         const aiMsg: ChatMessage = {
           id: uid(),
           role: 'ai',
           content: data.response || '',
-          modelName: data.model_name || data.model_used,
+          modelName: modelLabel,
           modelKey: data.model_used,
           executionMode: data.execution_mode || (data.simulated ? 'SIMULATED' : 'REAL_OLLAMA_INFERENCE'),
           latencyMs: data.latency_ms,
@@ -108,112 +115,186 @@ export default function ChatPanel({
     }
   };
 
-  return (
-    <div style={styles.wrapper}>
-      {/* Top Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.logo}>A-01</span>
-          <div>
-            <span style={styles.title}>ModelRouter</span>
-            <span style={styles.subtitle}> · Autonomous Prompt-to-Model Inference Gateway</span>
-          </div>
-        </div>
+  const hasMessages = messages.length > 0;
 
-        <button
-          type="button"
-          style={styles.inspectorToggleBtn}
-          onClick={onToggleInspector}
-          title={inspectorOpen ? 'Hide Inspector Panel' : 'Show Inspector Panel'}
-        >
-          {inspectorOpen ? 'Inspector ⇥' : '⇤ Inspector'}
-        </button>
+  // The Gemini-style prompt input capsule
+  const renderInputCapsule = () => (
+    <div style={styles.inputCapsule}>
+      {/* File Upload Button (+) */}
+      <button
+        style={styles.plusBtn}
+        onClick={() => fileInputRef.current?.click()}
+        title="Upload file or context"
+        aria-label="Upload file"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        style={{ display: 'none' }}
+        multiple
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            const names = Array.from(e.target.files).map((f) => f.name).join(', ');
+            setInput((prev) => prev + (prev ? '\n' : '') + `[Attached: ${names}]`);
+          }
+          e.target.value = '';
+        }}
+      />
+
+      {/* Model Selector Pill (Dialog Box 01 & 02) */}
+      <div style={styles.modelPillContainer}>
+        <ModelsAvailablePopup
+          models={models}
+          onModelsChange={onModelsChange}
+          selectedModelName={lastUsedModel}
+        />
       </div>
 
-      {/* Messages */}
-      <div style={styles.messages}>
-        {messages.length === 0 && (
-          <div style={styles.empty}>
-            <div style={styles.emptyIcon}>⚡</div>
-            <p style={styles.emptyTitle}>ModelRouter Ready</p>
-            <p style={styles.emptySubtitle}>
-              Type any prompt. The backend automatically analyzes its complexity,
-              evaluates your models' features, and selects the winning model.
-            </p>
-          </div>
-        )}
+      {/* Textarea Input */}
+      <textarea
+        ref={textareaRef}
+        style={styles.textarea}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Ask Model Router…"
+        rows={1}
+        disabled={loading}
+        aria-label="Message input"
+      />
 
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-
-        {loading && (
-          <div style={styles.typingWrapper}>
-            <div style={styles.typingBubble}>
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-              <span className="typing-dot" />
-            </div>
-            <span style={styles.routingText}>Backend analyzing prompt & routing to optimal model…</span>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Input Area */}
-      <div style={styles.inputArea}>
-        {/* Row above textarea with "Models available" Popup Button */}
-        <div style={styles.controlsRow}>
-          <ModelsAvailablePopup
-            models={models}
-            onModelsChange={onModelsChange}
-          />
-          <div style={styles.routingModeNotice}>
-            Autonomous routing: Backend server analyzes prompt complexity
-          </div>
-        </div>
-
-        {/* Textarea and Send button */}
-        <div style={styles.inputRow}>
-          <textarea
-            ref={textareaRef}
-            style={styles.textarea}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message ModelRouter…"
-            rows={1}
-            disabled={loading}
-          />
-          <button
-            type="button"
-            style={{
-              ...styles.sendBtn,
-              ...(loading || !input.trim() ? styles.sendBtnDisabled : {}),
-            }}
-            onClick={send}
-            disabled={loading || !input.trim()}
-            title="Send (Enter)"
-          >
-            <SendIcon />
-          </button>
-        </div>
-        <p style={styles.hint}>
-          Enter to send · Shift+Enter for new line · Click "Models available" to modify a model's latency or availability
-        </p>
-      </div>
+      {/* Send Arrow Button */}
+      <button
+        type="button"
+        style={{
+          ...styles.sendBtn,
+          ...(loading || !input.trim() ? styles.sendBtnDisabled : styles.sendBtnActive),
+        }}
+        onClick={send}
+        disabled={loading || !input.trim()}
+        title="Send prompt"
+        aria-label="Send prompt"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5" />
+          <polyline points="5 12 12 5 19 12" />
+        </svg>
+      </button>
     </div>
   );
-}
 
-function SendIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
+    <div style={styles.wrapper}>
+      {/* ── Ambient Background Dimming Animation (when ball is active) ── */}
+      <div
+        style={{
+          ...styles.ambientDimOverlay,
+          opacity: loading ? 1 : 0,
+          pointerEvents: loading ? 'none' : 'none',
+        }}
+      />
+
+      {/* ── Top Navigation Bar ── */}
+      <header style={styles.navbar}>
+        {/* Left: ONLY the clickable Logo (no text "Model Router") */}
+        <button
+          style={styles.logoBtn}
+          onClick={onOpenSidebar}
+          title="Open menu"
+          aria-label="Open menu"
+        >
+          <img src="/logo-icon.png" alt="Model Router" style={styles.navLogoImg} />
+        </button>
+
+        <div style={styles.navCenterSpacer} />
+
+        {/* Right: ONLY the Analytics Window Icon Button */}
+        <button
+          style={{
+            ...styles.analyticsIconBtn,
+            background: inspectorOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
+            color: inspectorOpen ? '#8ab4f8' : '#9aa0a6',
+          }}
+          onClick={onToggleInspector}
+          title={inspectorOpen ? 'Hide analysis panel' : 'Show analysis panel'}
+          aria-label="Toggle analysis window"
+        >
+          {/* Split window / Analysis panel toggle icon */}
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+          </svg>
+        </button>
+      </header>
+
+      {/* ── Main Chat / Welcome Body ── */}
+      <div style={styles.bodyArea}>
+        {!hasMessages ? (
+          /* Gemini Home Screen (Clean & Centered) */
+          <div style={styles.homeCenterWrapper}>
+            <div style={styles.homeGreeting}>
+              <h1 style={styles.homeTitle}>Welcome to Model Router</h1>
+              <p style={styles.homeSubtitle}>
+                Autonomous prompt-to-model inference routing gateway
+              </p>
+            </div>
+
+            {/* Input bar centered on home screen (Gemini style) */}
+            <div style={styles.homeInputContainer}>
+              {renderInputCapsule()}
+            </div>
+          </div>
+        ) : (
+          /* Chat Stream when messages exist */
+          <div style={styles.messagesStream}>
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+
+            {loading && (
+              <div style={styles.loadingArea}>
+                <div style={styles.ballContainer}>
+                  <CrystalizedBall
+                    preset="plasma"
+                    color="#5b91f2"
+                    size={0.7}
+                    crackle={0.85}
+                    fill={0.5}
+                    interactive
+                    hoverStrength={0.7}
+                  />
+                </div>
+                <div style={styles.typingIndicator}>
+                  <div style={styles.typingDots}>
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                  </div>
+                  <span style={styles.routingNotice}>
+                    Evaluating complexity & selecting optimal model…
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Bottom Input Bar (when messages exist) ── */}
+      {hasMessages && (
+        <div style={styles.bottomInputWrap}>
+          {renderInputCapsule()}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -222,52 +303,103 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#ffffff',
     position: 'relative',
     overflow: 'hidden',
   },
-  header: {
+  ambientDimOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background:
+      'radial-gradient(ellipse at 50% 50%, rgba(91, 145, 242, 0.16) 0%, rgba(10, 12, 16, 0.78) 55%, rgba(5, 5, 8, 0.92) 100%)',
+    zIndex: 1,
+    pointerEvents: 'none',
+    transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
+
+  // ── Navbar ──
+  navbar: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '12px 20px',
-    borderBottom: '1px solid #e5e5e5',
     flexShrink: 0,
+    zIndex: 10,
   },
-  headerLeft: {
+  logoBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px',
+    borderRadius: 8,
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    transition: 'opacity 0.15s ease',
   },
-  logo: {
-    fontSize: 12,
-    fontWeight: 700,
-    background: '#1a1a1a',
-    color: '#fff',
-    padding: '2px 7px',
-    borderRadius: 5,
-    letterSpacing: '0.05em',
+  navLogoImg: {
+    height: 36,
+    width: 'auto',
+    objectFit: 'contain',
+    display: 'block',
   },
-  title: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: '#1a1a1a',
+  navCenterSpacer: {
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 12,
-    color: '#888',
-  },
-  inspectorToggleBtn: {
-    background: '#f5f5f5',
-    border: '1px solid #e0e0e0',
-    borderRadius: 6,
-    padding: '5px 10px',
-    fontSize: 12,
-    fontWeight: 600,
-    color: '#444',
+  analyticsIconBtn: {
+    border: 'none',
     cursor: 'pointer',
+    padding: '7px',
+    borderRadius: 8,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.15s ease, color 0.15s ease',
   },
-  messages: {
+
+  // ── Body Area ──
+  bodyArea: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    position: 'relative',
+    zIndex: 2,
+  },
+
+  // ── Home Center (Empty State) ──
+  homeCenterWrapper: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 24px 60px',
+    animation: 'fadeIn 0.3s ease',
+  },
+  homeGreeting: {
+    textAlign: 'center' as const,
+    marginBottom: 32,
+  },
+  homeTitle: {
+    fontSize: 34,
+    fontWeight: 600,
+    color: '#e3e3e3',
+    letterSpacing: '-0.02em',
+    marginBottom: 8,
+  },
+  homeSubtitle: {
+    fontSize: 15,
+    color: '#9aa0a6',
+    fontWeight: 400,
+    letterSpacing: '-0.01em',
+  },
+  homeInputContainer: {
+    width: '100%',
+    maxWidth: 680,
+  },
+
+  // ── Messages Stream ──
+  messagesStream: {
     flex: 1,
     overflowY: 'auto',
     padding: '20px 0',
@@ -275,96 +407,94 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 8,
   },
-  empty: {
+  loadingArea: {
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    padding: '8px 0',
+  },
+  ballContainer: {
+    width: '100%',
+    height: '420px',
+    position: 'relative' as const,
+    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    padding: '80px 32px',
-    textAlign: 'center',
   },
-  emptyIcon: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#1a1a1a',
-    margin: '0 0 6px 0',
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#777',
-    maxWidth: 420,
-    lineHeight: 1.5,
-    margin: 0,
-  },
-  typingWrapper: {
+  typingIndicator: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
-    padding: '6px 24px',
+    gap: 12,
+    padding: '8px 28px',
   },
-  typingBubble: {
-    background: '#f3f4f6',
-    borderRadius: 16,
-    padding: '10px 14px',
-    display: 'inline-flex',
+  typingDots: {
+    display: 'flex',
     alignItems: 'center',
     gap: 4,
+    padding: '8px 12px',
+    borderRadius: 16,
+    background: 'rgba(255, 255, 255, 0.05)',
   },
-  routingText: {
+  routingNotice: {
     fontSize: 12,
-    color: '#888',
+    color: '#9aa0a6',
+    fontStyle: 'italic' as const,
   },
-  inputArea: {
-    padding: '12px 20px 16px',
-    borderTop: '1px solid #e5e5e5',
-    background: '#ffffff',
+
+  // ── Input Capsule ──
+  bottomInputWrap: {
+    padding: '12px 24px 18px',
     display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
+    justifyContent: 'center',
+    flexShrink: 0,
+    position: 'relative' as const,
+    zIndex: 2,
   },
-  controlsRow: {
+  inputCapsule: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  routingModeNotice: {
-    fontSize: 11,
-    color: '#888',
-    fontStyle: 'italic',
-  },
-  inputRow: {
-    display: 'flex',
-    alignItems: 'flex-end',
     gap: 10,
-    background: '#ffffff',
-    border: '1px solid #d1d5db',
-    borderRadius: 10,
-    padding: '8px 12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    width: '100%',
+    maxWidth: 720,
+    background: '#1e1f20',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 28,
+    padding: '8px 12px 8px 14px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.28)',
+    transition: 'border-color 0.15s ease',
+  },
+  plusBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9aa0a6',
+    cursor: 'pointer',
+    padding: 4,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    transition: 'color 0.15s ease',
+  },
+  modelPillContainer: {
+    flexShrink: 0,
   },
   textarea: {
     flex: 1,
     border: 'none',
     outline: 'none',
     fontSize: 14,
-    color: '#1a1a1a',
+    color: '#e3e3e3',
     background: 'transparent',
     resize: 'none',
-    maxHeight: 160,
+    maxHeight: 140,
     fontFamily: 'inherit',
-    lineHeight: 1.4,
+    lineHeight: 1.45,
+    padding: '4px 0',
   },
   sendBtn: {
-    background: '#1a1a1a',
     border: 'none',
-    borderRadius: 7,
-    color: '#fff',
+    borderRadius: '50%',
     width: 32,
     height: 32,
     display: 'flex',
@@ -372,16 +502,15 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     cursor: 'pointer',
     flexShrink: 0,
+    transition: 'all 0.15s ease',
+  },
+  sendBtnActive: {
+    background: '#e3e3e3',
+    color: '#131314',
   },
   sendBtnDisabled: {
-    background: '#e5e7eb',
-    color: '#9ca3af',
+    background: 'rgba(255, 255, 255, 0.08)',
+    color: 'rgba(255, 255, 255, 0.2)',
     cursor: 'not-allowed',
-  },
-  hint: {
-    fontSize: 11,
-    color: '#999',
-    margin: 0,
-    textAlign: 'center',
   },
 };

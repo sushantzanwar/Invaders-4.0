@@ -71,14 +71,13 @@ class ConstraintEngine:
             violations.append(f"Model is {' and '.join(status_desc)}")
 
         # 2. Hard Latency Deadline:
-        # Check against model's configured max_latency_ms (or avg_latency_ms)
+        # Check against model's configured average latency
         max_lat_budget = constraints.get("max_latency_ms")
         if max_lat_budget is not None and max_lat_budget > 0:
-            # If model's configured upper-bound latency exceeds request deadline
-            effective_model_latency = getattr(model, "max_latency_ms", model.avg_latency_ms)
+            effective_model_latency = getattr(model, "avg_latency_ms", model.max_latency_ms)
             if effective_model_latency > max_lat_budget:
                 violations.append(
-                    f"Configured latency bound ({effective_model_latency}ms) exceeds request deadline ({max_lat_budget}ms)"
+                    f"Configured latency ({effective_model_latency}ms) exceeds request deadline ({max_lat_budget}ms)"
                 )
 
         # 3. Capability floor
