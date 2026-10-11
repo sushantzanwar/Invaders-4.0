@@ -4,6 +4,7 @@ import { postInfer } from '../api';
 import MessageBubble from './MessageBubble';
 import ModelsAvailablePopup from './ModelsAvailablePopup';
 import CrystalizedBall from './CrystalizedBall';
+import LatticeLoader from './LatticeLoader';
 
 interface ChatPanelProps {
   models: ModelInfo[];
@@ -270,15 +271,27 @@ export default function ChatPanel({
                     hoverStrength={0.7}
                   />
                 </div>
-                <div style={styles.typingIndicator}>
-                  <div style={styles.typingDots}>
-                    <span className="typing-dot" />
-                    <span className="typing-dot" />
-                    <span className="typing-dot" />
-                  </div>
-                  <span style={styles.routingNotice}>
-                    Evaluating complexity & selecting optimal model…
-                  </span>
+                <div style={styles.loaderContainer}>
+                  <LatticeLoader
+                    status="working"
+                    label="Thinking"
+                    doneLabel="Done in"
+                    errorLabel="Failed after"
+                    pattern="orbit"
+                    grid={3}
+                    shape="round"
+                    color="#8ab4f8"
+                    doneColor="#22c55e"
+                    errorColor="#ef4444"
+                    cellSize={6}
+                    gap={2}
+                    fontSize={14}
+                    step={90}
+                    idleOpacity={0.15}
+                    glow={false}
+                    glowColor=""
+                    showTimer
+                  />
                 </div>
               </div>
             )}
@@ -422,24 +435,16 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typingIndicator: {
+  loaderContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
-    padding: '8px 28px',
-  },
-  typingDots: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '8px 12px',
-    borderRadius: 16,
+    justifyContent: 'center',
+    padding: '8px 20px',
+    borderRadius: 24,
     background: 'rgba(255, 255, 255, 0.05)',
-  },
-  routingNotice: {
-    fontSize: 12,
-    color: '#9aa0a6',
-    fontStyle: 'italic' as const,
+    backdropFilter: 'blur(8px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    marginTop: 8,
   },
 
   // ── Input Capsule ──
