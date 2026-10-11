@@ -141,18 +141,16 @@ export default function MessageBubble({ message }: Props) {
 
 function AiSparkIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#c084fc" />
-          <stop offset="100%" stopColor="#60a5fa" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"
-        fill="url(#sparkGrad)"
-      />
-    </svg>
+    <img
+      src="/logo-icon.png"
+      alt="Invaders 4.0"
+      style={{
+        width: 18,
+        height: 18,
+        objectFit: 'contain',
+        display: 'block',
+      }}
+    />
   );
 }
 
@@ -174,15 +172,16 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '100%',
   },
   aiAvatar: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: '50%',
-    background: 'rgba(129,140,248,0.15)',
-    border: '1px solid rgba(129,140,248,0.25)',
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
   },
   userAvatar: {
     width: 30,
