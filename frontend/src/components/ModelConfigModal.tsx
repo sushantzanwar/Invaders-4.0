@@ -69,10 +69,22 @@ export default function ModelConfigModal({ model, onClose, onSaveSuccess }: Prop
           {/* Latency Comparison Info Box */}
           <div style={styles.infoBox}>
             <div style={styles.infoRow}>
+              <span>Official Model ID:</span>
+              <code style={{ color: '#1a1a1a', background: '#e5e7eb', padding: '1px 5px', borderRadius: 3 }}>
+                {model.model_id}
+              </code>
+            </div>
+            {model.size_gb && (
+              <div style={{ ...styles.infoRow, marginTop: 4 }}>
+                <span>Installed Size:</span>
+                <strong style={{ color: '#1a1a1a' }}>{model.size_gb}</strong>
+              </div>
+            )}
+            <div style={{ ...styles.infoRow, marginTop: 4 }}>
               <span>Actual Measured Latency:</span>
               <strong style={{ color: '#1a1a1a' }}>{model.measured_latency_ms}ms</strong>
             </div>
-            <div style={{ fontSize: 11, color: '#666', marginTop: 3 }}>
+            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
               * Measured from latest inference execution. The parameters below are judge-configurable estimates.
             </div>
           </div>

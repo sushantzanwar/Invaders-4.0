@@ -1,15 +1,16 @@
 """
 models.py - Model Registry for A-01 ModelRouter
 ------------------------------------------------
-Manages the shared model registry for both:
+Official Model Catalog verified against operator's Ollama engine:
+1. qwen3.5:2b   - 2.7 GB - Text & Vision - completion, thinking, tools, vision
+2. qwen3.5:4b   - 3.3 GB - Text & Vision - completion, thinking, tools, vision
+3. deepseek-r1:7b - 4.7 GB - Text        - completion, thinking, tools
+4. gemma4:12b   - 8.0 GB - Text & Vision - audio, completion, thinking, tools, vision
+5. gpt-oss:20b  - 13 GB  - Text          - completion, thinking, tools
+
+Manages the shared model registry for:
   Pipeline A: Model Configuration (Judge parameters, SLA, latency bounds)
   Pipeline B: Runtime Model Routing (Used by router to filter and score candidates)
-
-Features:
-- Thread-safe updates
-- JSON persistence (atomic write to models_config.json)
-- Full parameter validation
-- Factory default reset
 """
 
 import os
@@ -17,7 +18,7 @@ import json
 import tempfile
 import copy
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from threading import Lock
 
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "models_config.json")
@@ -29,7 +30,7 @@ class ModelProfile:
     Represents a single registered model and its configuration.
 
     Parameters:
-        model_key           : Unique identifier (e.g. 'qwen-2b')
+        model_key           : Internal unique identifier (e.g. 'qwen-2b')
         name                : Display name (e.g. 'Qwen3.5 2B')
         role                : Functional role description
         avg_latency_ms      : Configured estimate of average response latency (used for ranking)
@@ -41,8 +42,11 @@ class ModelProfile:
         availability        : Whether model is online/offline
         enabled             : Enabled status for routing
         cost_per_1k_tokens  : Cost in USD per 1K tokens (0.0 for local Ollama)
-        provider            : 'ollama' | 'gemini' | 'groq'
-        model_id            : Provider-specific model tag (e.g. 'qwen2.5:1.5b' or 'qwen3.5:2b')
+        provider            : 'ollama'
+        model_id            : Official provider model ID (e.g. 'qwen3.5:2b', 'gemma4:12b')
+        size_gb             : Model on-disk download size
+        supports_images     : Vision input capability flag
+        capabilities        : Capabilities reported by Ollama (completion, thinking, vision, etc.)
         description         : Detailed description
     """
     model_key: str
@@ -59,7 +63,10 @@ class ModelProfile:
     cost_per_1k_tokens: float
     provider: str
     model_id: str
-    description: str
+    size_gb: str = "3.0 GB"
+    supports_images: bool = False
+    capabilities: str = "completion, thinking, tools"
+    description: str = ""
 
     # Legacy/compatibility aliases
     @property
@@ -88,13 +95,13 @@ class ModelProfile:
 
 
 # ---------------------------------------------------------------------------
-# Default 5 Ollama Model Profiles
+# Default 5 Ollama Model Profiles (Source of Truth from MODEL_CATALOG.md)
 # ---------------------------------------------------------------------------
 _DEFAULT_PROFILES: List[dict] = [
     {
         "model_key": "qwen-2b",
         "name": "Qwen3.5 2B",
-        "role": "Lightweight tasks",
+        "role": "Lightweight tasks (Text & Vision)",
         "avg_latency_ms": 650,
         "max_latency_ms": 1800,
         "measured_latency_ms": 620,
@@ -105,13 +112,16 @@ _DEFAULT_PROFILES: List[dict] = [
         "enabled": True,
         "cost_per_1k_tokens": 0.0,
         "provider": "ollama",
-        "model_id": "qwen2.5:1.5b",
-        "description": "Lightweight model for low-latency queries, summaries, and fact retrieval.",
+        "model_id": "qwen3.5:2b",
+        "size_gb": "2.7 GB",
+        "supports_images": True,
+        "capabilities": "completion, thinking, tools, vision",
+        "description": "Ultra-fast 2.7GB model with vision. Ideal for short summaries and factual questions.",
     },
     {
         "model_key": "qwen-4b",
         "name": "Qwen3.5 4B",
-        "role": "General-purpose tasks",
+        "role": "General-purpose tasks (Text & Vision)",
         "avg_latency_ms": 1250,
         "max_latency_ms": 3200,
         "measured_latency_ms": 1180,
@@ -122,8 +132,11 @@ _DEFAULT_PROFILES: List[dict] = [
         "enabled": True,
         "cost_per_1k_tokens": 0.0,
         "provider": "ollama",
-        "model_id": "qwen2.5:3b",
-        "description": "General-purpose model balancing capability, latency, and context breadth.",
+        "model_id": "qwen3.5:4b",
+        "size_gb": "3.3 GB",
+        "supports_images": True,
+        "capabilities": "completion, thinking, tools, vision",
+        "description": "Everyday balanced 3.3GB model with vision. Balances speed, context, and quality.",
     },
     {
         "model_key": "deepseek-r1",
@@ -140,7 +153,30 @@ _DEFAULT_PROFILES: List[dict] = [
         "cost_per_1k_tokens": 0.0,
         "provider": "ollama",
         "model_id": "deepseek-r1:7b",
-        "description": "Deep reasoning and chain-of-thought mathematical proof solver.",
+        "size_gb": "4.7 GB",
+        "supports_images": False,
+        "capabilities": "completion, thinking, tools",
+        "description": "Deep 4.7GB chain-of-thought model. Excels at formal proofs, logic, and mathematics.",
+    },
+    {
+        "model_key": "gemma-12b",
+        "name": "Gemma 4 12B",
+        "role": "Image understanding, OCR, and document parsing",
+        "avg_latency_ms": 3400,
+        "max_latency_ms": 8200,
+        "measured_latency_ms": 3310,
+        "capability_score": 8.2,
+        "context_length": 131072,
+        "reliability": 0.95,
+        "availability": True,
+        "enabled": True,
+        "cost_per_1k_tokens": 0.0,
+        "provider": "ollama",
+        "model_id": "gemma4:12b",
+        "size_gb": "8.0 GB",
+        "supports_images": True,
+        "capabilities": "audio, completion, thinking, tools, vision",
+        "description": "Multimodal 8.0GB architecture with native vision & document extraction.",
     },
     {
         "model_key": "gpt-oss-20b",
@@ -157,24 +193,10 @@ _DEFAULT_PROFILES: List[dict] = [
         "cost_per_1k_tokens": 0.0,
         "provider": "ollama",
         "model_id": "gpt-oss:20b",
-        "description": "Large-scale coding engine, architectural design, and complex problem solving.",
-    },
-    {
-        "model_key": "gemma-12b",
-        "name": "Gemma 4 12B",
-        "role": "Image understanding, OCR, and document parsing",
-        "avg_latency_ms": 3400,
-        "max_latency_ms": 8200,
-        "measured_latency_ms": 3310,
-        "capability_score": 8.2,
-        "context_length": 131072,
-        "reliability": 0.95,
-        "availability": True,
-        "enabled": True,
-        "cost_per_1k_tokens": 0.0,
-        "provider": "ollama",
-        "model_id": "gemma2:9b",
-        "description": "Multimodal analysis, text extraction, OCR, structured document synthesis.",
+        "size_gb": "13 GB",
+        "supports_images": False,
+        "capabilities": "completion, thinking, tools",
+        "description": "High-capacity 13GB coding engine for complex software architecture and debugging.",
     },
 ]
 

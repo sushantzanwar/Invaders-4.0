@@ -58,6 +58,8 @@ export default function TokenCapacityChart({ models }: Props) {
                     }}
                   />
                   <span style={styles.modelName}>{m.name}</span>
+                  {m.size_gb && <span style={styles.sizeTag}>{m.size_gb}</span>}
+                  {m.supports_images && <span style={styles.visionTag}>Vision</span>}
                 </div>
                 <div style={styles.tokenValues}>
                   <strong style={styles.tokenCount}>{tokens.toLocaleString()}</strong>
@@ -153,6 +155,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 600,
     color: '#222',
+  },
+  sizeTag: {
+    fontSize: 10,
+    color: '#666',
+    background: '#f3f4f6',
+    padding: '1px 4px',
+    borderRadius: 3,
+    fontWeight: 500,
+  },
+  visionTag: {
+    fontSize: 10,
+    color: '#2563eb',
+    background: '#eff6ff',
+    padding: '1px 4px',
+    borderRadius: 3,
+    fontWeight: 600,
   },
   tokenValues: {
     display: 'flex',
