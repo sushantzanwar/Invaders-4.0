@@ -9,7 +9,7 @@ interface Props {
   lastDecision: Decision | null;
 }
 
-type Section = 'decision' | 'sliders' | 'tokens' | 'models';
+type Section = 'decision' | 'tokens' | 'models';
 
 const SECTIONS: { id: Section; title: string; icon: React.ReactNode }[] = [
   {
@@ -19,23 +19,6 @@ const SECTIONS: { id: Section; title: string; icon: React.ReactNode }[] = [
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
         <circle cx="12" cy="12" r="3" />
         <path d="M12 2v2M12 20v2M2 12h2M20 12h2" />
-      </svg>
-    ),
-  },
-  {
-    id: 'sliders',
-    title: 'Parameter Sliders',
-    icon: (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-        <line x1="4" y1="21" x2="4" y2="14" />
-        <line x1="4" y1="10" x2="4" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12" y2="3" />
-        <line x1="20" y1="21" x2="20" y2="16" />
-        <line x1="20" y1="12" x2="20" y2="3" />
-        <line x1="1" y1="14" x2="7" y2="14" />
-        <line x1="9" y1="8" x2="15" y2="8" />
-        <line x1="17" y1="16" x2="23" y2="16" />
       </svg>
     ),
   },
@@ -66,15 +49,9 @@ const SECTIONS: { id: Section; title: string; icon: React.ReactNode }[] = [
 
 export default function InspectorPanel({ models, lastDecision }: Props) {
   const [openSections, setOpenSections] = useState<Set<Section>>(
-    new Set(['decision', 'sliders', 'tokens', 'models'])
+    new Set(['decision', 'tokens', 'models'])
   );
   const [showDetailedModal, setShowDetailedModal] = useState(false);
-
-  // Local parameter slider states for interactive tuning in analysis tab
-  const [targetLatency, setTargetLatency] = useState(2700);
-  const [targetCapability, setTargetCapability] = useState(4.0);
-  const [targetCost, setTargetCost] = useState(0.00035);
-  const [targetContext, setTargetContext] = useState(32768);
 
   const toggle = (id: Section) => {
     setOpenSections((prev) => {
@@ -190,78 +167,7 @@ export default function InspectorPanel({ models, lastDecision }: Props) {
                   <div style={styles.sectionBody}>
                     {id === 'decision' && <ExplainabilityBox decision={lastDecision} />}
 
-                    {/* Interactive Parameter Sliders in Analysis Tab */}
-                    {id === 'sliders' && (
-                      <div style={styles.slidersContainer}>
-                        <div style={styles.sliderIntro}>
-                          Fine-tune threshold constraints for subsequent prompts
-                        </div>
 
-                        {/* Slider 1: Max Latency */}
-                        <div style={styles.sliderItem}>
-                          <div style={styles.sliderHeaderRow}>
-                            <span style={styles.sliderItemLabel}>Max Latency</span>
-                            <span style={styles.sliderItemValue}>{targetLatency.toLocaleString()}ms</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={200}
-                            max={10000}
-                            step={100}
-                            value={targetLatency}
-                            onChange={(e) => setTargetLatency(Number(e.target.value))}
-                          />
-                        </div>
-
-                        {/* Slider 2: Max Cost / Token */}
-                        <div style={styles.sliderItem}>
-                          <div style={styles.sliderHeaderRow}>
-                            <span style={styles.sliderItemLabel}>Max Cost / Token</span>
-                            <span style={styles.sliderItemValue}>${targetCost.toFixed(5)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={0.001}
-                            step={0.00005}
-                            value={targetCost}
-                            onChange={(e) => setTargetCost(Number(e.target.value))}
-                          />
-                        </div>
-
-                        {/* Slider 3: Min Capability */}
-                        <div style={styles.sliderItem}>
-                          <div style={styles.sliderHeaderRow}>
-                            <span style={styles.sliderItemLabel}>Min Capability</span>
-                            <span style={styles.sliderItemValue}>{targetCapability.toFixed(1)}/10</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={1}
-                            max={10}
-                            step={0.1}
-                            value={targetCapability}
-                            onChange={(e) => setTargetCapability(Number(e.target.value))}
-                          />
-                        </div>
-
-                        {/* Slider 4: Min Context */}
-                        <div style={styles.sliderItem}>
-                          <div style={styles.sliderHeaderRow}>
-                            <span style={styles.sliderItemLabel}>Min Context</span>
-                            <span style={styles.sliderItemValue}>{Math.round(targetContext / 1024)}K tokens</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={4096}
-                            max={131072}
-                            step={4096}
-                            value={targetContext}
-                            onChange={(e) => setTargetContext(Number(e.target.value))}
-                          />
-                        </div>
-                      </div>
-                    )}
 
                     {id === 'tokens' && <TokenCapacityChart models={models} />}
 
@@ -529,40 +435,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid rgba(255, 255, 255, 0.04)',
     paddingTop: 10,
   },
-  slidersContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  sliderIntro: {
-    fontSize: 11,
-    color: '#9aa0a6',
-    lineHeight: 1.4,
-  },
-  sliderItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    background: 'rgba(255, 255, 255, 0.02)',
-    padding: '8px 10px',
-    borderRadius: 8,
-    border: '1px solid rgba(255, 255, 255, 0.04)',
-  },
-  sliderHeaderRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sliderItemLabel: {
-    fontSize: 11,
-    color: '#9aa0a6',
-  },
-  sliderItemValue: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#8ab4f8',
-    fontFamily: 'monospace',
-  },
+
   modelStatusList: {
     display: 'flex',
     flexDirection: 'column',
