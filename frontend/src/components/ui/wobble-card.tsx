@@ -7,10 +7,12 @@ export const WobbleCard = ({
   children,
   containerClassName,
   className,
+  style,
 }: {
   children: React.ReactNode;
   containerClassName?: string;
   className?: string;
+  style?: React.CSSProperties;
 }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
@@ -35,6 +37,7 @@ export const WobbleCard = ({
           ? `translate3d(${mousePosition.x}px, ${mousePosition.y}px, 0) scale3d(1, 1, 1)`
           : "translate3d(0px, 0px, 0) scale3d(1, 1, 1)",
         transition: "transform 0.1s ease-out",
+        ...style,
       }}
       className={cn(
         "mx-auto w-full relative rounded-2xl overflow-hidden",

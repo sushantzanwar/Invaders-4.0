@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { AuditEntry, ModelInfo } from '../types';
-import { fetchLogs } from '../api';
+import { fetchLogs, fetchModels } from '../api';
 import GradientWaves from './GradientWaves';
 import { WobbleCard } from './ui/wobble-card';
 
@@ -9,16 +9,29 @@ interface Props {
   onBack: () => void;
 }
 
-export default function DetailedAnalysisPage({ models, onBack }: Props) {
+export default function DetailedAnalysisPage({ models: initialModels, onBack }: Props) {
+  const [models, setModels] = useState<ModelInfo[]>(initialModels);
   const [logs, setLogs] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch real-time telemetry logs and models from backend
+  const loadData = () => {
+    Promise.all([fetchLogs(), fetchModels()])
+      .then(([logsData, modelsData]) => {
+        setLogs(logsData || []);
+        if (modelsData && modelsData.length > 0) {
+          setModels(modelsData);
+        }
+      })
+      .catch((err) => console.warn('Failed to load telemetry:', err))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     setLoading(true);
-    fetchLogs()
-      .then((data) => setLogs(data))
-      .catch((err) => console.warn('Failed to load logs:', err))
-      .finally(() => setLoading(false));
+    loadData();
+    const interval = setInterval(loadData, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalReqs = logs.length;
@@ -31,7 +44,7 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
         )
       : 0;
 
-  // 1. Model Selection Distribution
+  // Real model usage frequencies from backend audit logs
   const modelUsageCounts: Record<string, number> = {};
   logs.forEach((l) => {
     const m = l.model_used || l.model || 'Unknown';
@@ -39,7 +52,7 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
   });
   const modelUsageList = Object.entries(modelUsageCounts).sort((a, b) => b[1] - a[1]);
 
-  // 2. Latency Breakdown by Model
+  // Model-specific actual latency from backend
   const modelLatencyMap: Record<string, { total: number; count: number }> = {};
   logs.forEach((l) => {
     const m = l.model_used || l.model || 'Unknown';
@@ -48,9 +61,32 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
     modelLatencyMap[m].count += 1;
   });
 
-  // 3. Recent 12 Inferences for Trend Chart
-  const recentLogs = [...logs].slice(-14);
-  const maxRecentLatency = Math.max(...recentLogs.map((l) => l.response_time_ms || 0), 100);
+  // Spider / Radar Graph Dimensions & Axes
+  // Attributes: Capability (0-10), Speed (Inverse Latency), Context Window, Cost Efficiency, Reliability
+  const radarDimensions = [
+    { key: 'capability', label: 'Capability (IQ)', max: 10 },
+    { key: 'speed', label: 'Speed Score', max: 10 },
+    { key: 'context', label: 'Context Size', max: 128 },
+    { key: 'costEff', label: 'Cost Efficiency', max: 10 },
+    { key: 'reliability', label: 'Reliability', max: 100 },
+  ];
+
+  // Distinct theme colors for model polygon overlays
+  const modelColors = ['#f43f5e', '#38bdf8', '#a855f7', '#34d399', '#fbbf24', '#f97316'];
+
+  // Radar chart calculation: Center (160, 160), Radius 110
+  const cx = 160;
+  const cy = 160;
+  const r = 105;
+  const numAxes = radarDimensions.length;
+
+  const getAxisPoint = (index: number, factor: number) => {
+    const angle = (Math.PI * 2 * index) / numAxes - Math.PI / 2;
+    return {
+      x: cx + r * factor * Math.cos(angle),
+      y: cy + r * factor * Math.sin(angle),
+    };
+  };
 
   return (
     <div style={styles.page}>
@@ -102,10 +138,10 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
             <div style={styles.dividerV} />
 
             <div style={styles.brandRow}>
-              <img src="/logo-icon.png" alt="Model Router Logo" style={styles.logoImg} />
+              <img src="/logo-icon.png" alt="Invaders 4.0 Logo" style={styles.logoImg} />
               <div>
                 <h1 style={styles.title}>Detailed Routing Analysis</h1>
-                <p style={styles.subtitle}>Autonomous telemetry, model efficiency curves & visual audit metrics</p>
+                <p style={styles.subtitle}>Dynamic multi-model spider radar analysis & real-time backend telemetry</p>
               </div>
             </div>
           </div>
@@ -113,111 +149,220 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
           <div style={styles.headerRight}>
             <span style={styles.livePill}>
               <span style={styles.pulseDot} />
-              Live Gateway Telemetry
+              Backend Syncing Live
             </span>
           </div>
         </header>
 
         {/* Scrollable Dashboard Body */}
         <main style={styles.scrollArea}>
-          {/* Top Metric Cards */}
+          {/* Top Metric Cards with distinct opaque styling */}
           <div style={styles.statsGrid}>
-            <div style={styles.statCard}>
+            <div style={{ ...styles.statCard, borderTop: '3px solid #8ab4f8' }}>
               <span style={styles.statLabel}>Total Inferences</span>
               <span style={styles.statVal}>{totalReqs}</span>
               <span style={styles.statSub}>Audit queries routed</span>
             </div>
-            <div style={styles.statCard}>
+            <div style={{ ...styles.statCard, borderTop: '3px solid #34d399' }}>
               <span style={styles.statLabel}>Success Rate</span>
               <span style={{ ...styles.statVal, color: '#34d399' }}>{successRate}%</span>
               <span style={styles.statSub}>{successfulReqs} of {totalReqs} completed</span>
             </div>
-            <div style={styles.statCard}>
+            <div style={{ ...styles.statCard, borderTop: '3px solid #a855f7' }}>
               <span style={styles.statLabel}>Average Latency</span>
-              <span style={{ ...styles.statVal, color: '#8ab4f8' }}>{avgLatency}ms</span>
+              <span style={{ ...styles.statVal, color: '#c084fc' }}>{avgLatency}ms</span>
               <span style={styles.statSub}>End-to-end execution</span>
             </div>
-            <div style={styles.statCard}>
+            <div style={{ ...styles.statCard, borderTop: '3px solid #f43f5e' }}>
               <span style={styles.statLabel}>Registered Engines</span>
               <span style={styles.statVal}>{models.length}</span>
               <span style={styles.statSub}>{models.filter((m) => m.availability && m.enabled).length} online & active</span>
             </div>
           </div>
 
-          {/* Wobble Cards Visual Grid (Relying heavily on interactive visual charts) */}
+          {/* Wobble Cards Grid: Solid & Gradient Colors Matching Provided Example */}
           <div style={styles.wobbleGrid}>
-            {/* Card 1: Live Response Time / Latency Trend Line-Bar Chart */}
-            <WobbleCard containerClassName="col-span-1 lg:col-span-2 min-h-[340px] bg-slate-900 border border-white/10">
+            {/* Card 1: Spider / Radar Graph Multi-Model Benchmark (Solid Deep Fuchsia/Crimson Card) */}
+            <WobbleCard
+              containerClassName="col-span-1 lg:col-span-2 min-h-[380px]"
+              style={{
+                background: 'linear-gradient(135deg, #881337 0%, #9f1239 50%, #4c0519 100%)',
+                border: '1px solid rgba(251, 113, 133, 0.3)',
+                boxShadow: '0 20px 40px rgba(136, 19, 55, 0.45)',
+              }}
+            >
               <div style={styles.cardInner}>
                 <div style={styles.cardHeader}>
                   <div>
-                    <h2 style={styles.cardTitle}>Inference Latency Timeline (Recent Queries)</h2>
-                    <p style={styles.cardDesc}>Visual distribution of millisecond response times per routed prompt</p>
+                    <h2 style={styles.cardTitle}>Multi-Model Spider Radar Benchmark</h2>
+                    <p style={styles.cardDesc}>Geometric multi-axis performance & capability profile computed from backend parameters</p>
                   </div>
-                  <span style={styles.tagBadge}>Timeline Trend</span>
+                  <span style={{ ...styles.tagBadge, background: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.3)', color: '#fff' }}>
+                    Spider Graph
+                  </span>
                 </div>
 
-                {recentLogs.length === 0 ? (
-                  <div style={styles.emptyGraph}>No recent queries recorded. Send prompts to observe response curves.</div>
-                ) : (
-                  <div style={styles.trendGraphContainer}>
-                    <div style={styles.barsRow}>
-                      {recentLogs.map((log, i) => {
-                        const lat = log.response_time_ms || 0;
-                        const heightPct = Math.max(12, Math.min(100, (lat / maxRecentLatency) * 100));
-                        const isHigh = lat > 2000;
-                        const barColor = isHigh ? '#f59e0b' : '#8ab4f8';
+                <div style={styles.radarLayout}>
+                  {/* SVG Spider / Radar Plot */}
+                  <div style={styles.radarSvgWrap}>
+                    <svg width="320" height="320" viewBox="0 0 320 320" style={{ overflow: 'visible' }}>
+                      {/* Concentric Web Polygons (20%, 40%, 60%, 80%, 100%) */}
+                      {[0.2, 0.4, 0.6, 0.8, 1.0].map((level, lvlIdx) => {
+                        const pts = Array.from({ length: numAxes })
+                          .map((_, i) => {
+                            const p = getAxisPoint(i, level);
+                            return `${p.x},${p.y}`;
+                          })
+                          .join(' ');
+                        return (
+                          <polygon
+                            key={lvlIdx}
+                            points={pts}
+                            fill="none"
+                            stroke="rgba(255, 255, 255, 0.18)"
+                            strokeWidth="1"
+                            strokeDasharray={level === 1.0 ? 'none' : '3 3'}
+                          />
+                        );
+                      })}
+
+                      {/* Radial Axis Spokes */}
+                      {Array.from({ length: numAxes }).map((_, i) => {
+                        const p = getAxisPoint(i, 1.0);
+                        return (
+                          <line
+                            key={i}
+                            x1={cx}
+                            y1={cy}
+                            x2={p.x}
+                            y2={p.y}
+                            stroke="rgba(255, 255, 255, 0.28)"
+                            strokeWidth="1.2"
+                          />
+                        );
+                      })}
+
+                      {/* Dimension Labels */}
+                      {radarDimensions.map((dim, i) => {
+                        const p = getAxisPoint(i, 1.18);
+                        return (
+                          <text
+                            key={dim.key}
+                            x={p.x}
+                            y={p.y}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fill="#fef08a"
+                            fontSize="10"
+                            fontWeight="600"
+                            letterSpacing="0.02em"
+                          >
+                            {dim.label}
+                          </text>
+                        );
+                      })}
+
+                      {/* Model Data Polygons from Backend Models */}
+                      {models.map((m, mIdx) => {
+                        const col = modelColors[mIdx % modelColors.length];
+                        const capFactor = Math.min(1, Math.max(0.1, m.capability_score / 10));
+                        // Speed factor: 12000ms is slow (0.1), 300ms is fast (1.0)
+                        const speedFactor = Math.min(1, Math.max(0.15, (12000 - Math.min(m.avg_latency_ms, 11000)) / 11500));
+                        // Context factor: 4K is 0.2, 128K is 1.0
+                        const ctxFactor = Math.min(1, Math.max(0.2, (m.context_length / 1024) / 128));
+                        // Cost efficiency: cheaper is higher score
+                        const costFactor = Math.min(1, Math.max(0.2, (0.001 - Math.min(m.cost_per_1k_tokens / 1000, 0.0009)) / 0.001));
+                        // Reliability
+                        const relFactor = Math.min(1, Math.max(0.2, m.reliability || 0.9));
+
+                        const factors = [capFactor, speedFactor, ctxFactor, costFactor, relFactor];
+                        const polygonPts = factors
+                          .map((f, fIdx) => {
+                            const p = getAxisPoint(fIdx, f);
+                            return `${p.x},${p.y}`;
+                          })
+                          .join(' ');
 
                         return (
-                          <div key={log.log_id || i} style={styles.barCol} title={`#${i + 1}: ${lat}ms (${log.model_used || 'Auto'})`}>
-                            <span style={styles.barValueText}>{lat}ms</span>
-                            <div style={styles.barTrack}>
-                              <div
-                                style={{
-                                  ...styles.barFill,
-                                  height: `${heightPct}%`,
-                                  background: `linear-gradient(180deg, ${barColor} 0%, rgba(138, 180, 248, 0.25) 100%)`,
-                                }}
-                              />
+                          <g key={m.model_key}>
+                            <polygon
+                              points={polygonPts}
+                              fill={col}
+                              fillOpacity="0.22"
+                              stroke={col}
+                              strokeWidth="2.2"
+                            />
+                            {/* Vertices */}
+                            {factors.map((f, fIdx) => {
+                              const p = getAxisPoint(fIdx, f);
+                              return <circle key={fIdx} cx={p.x} cy={p.y} r="3.5" fill={col} stroke="#fff" strokeWidth="1" />;
+                            })}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+
+                  {/* Legend of Models */}
+                  <div style={styles.radarLegend}>
+                    <span style={styles.legendTitle}>Models Benchmark</span>
+                    <div style={styles.legendItems}>
+                      {models.map((m, mIdx) => {
+                        const col = modelColors[mIdx % modelColors.length];
+                        return (
+                          <div key={m.model_key} style={styles.legendRow}>
+                            <span style={{ ...styles.legendDot, background: col, boxShadow: `0 0 8px ${col}` }} />
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={styles.legendName}>{m.name}</span>
+                              <span style={styles.legendSub}>
+                                Cap {m.capability_score}/10 · {m.avg_latency_ms}ms · {Math.round(m.context_length / 1024)}K ctx
+                              </span>
                             </div>
-                            <span style={styles.barLabelText}>#{i + 1}</span>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             </WobbleCard>
 
-            {/* Card 2: Model Routing Distribution Doughnut/Bar Comparison */}
-            <WobbleCard containerClassName="col-span-1 min-h-[340px] bg-indigo-950/70 border border-white/10">
+            {/* Card 2: Engine Allocation & Traffic Share (Solid Deep Royal Blue Card) */}
+            <WobbleCard
+              containerClassName="col-span-1 min-h-[380px]"
+              style={{
+                background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%)',
+                border: '1px solid rgba(129, 140, 248, 0.3)',
+                boxShadow: '0 20px 40px rgba(30, 27, 75, 0.45)',
+              }}
+            >
               <div style={styles.cardInner}>
                 <div style={styles.cardHeader}>
                   <div>
                     <h2 style={styles.cardTitle}>Engine Allocation</h2>
-                    <p style={styles.cardDesc}>Share of queries chosen by router</p>
+                    <p style={styles.cardDesc}>Share of queries chosen by router from backend</p>
                   </div>
                 </div>
 
                 <div style={styles.allocationList}>
                   {modelUsageList.length === 0 ? (
-                    <div style={styles.emptyGraph}>Awaiting prompt telemetry…</div>
+                    <div style={styles.emptyGraph}>Awaiting prompt telemetry from gateway…</div>
                   ) : (
-                    modelUsageList.map(([name, count]) => {
+                    modelUsageList.map(([name, count], i) => {
                       const share = Math.round((count / (totalReqs || 1)) * 100);
+                      const col = modelColors[i % modelColors.length];
                       return (
                         <div key={name} style={styles.allocationRow}>
                           <div style={styles.allocHeader}>
                             <span style={styles.allocName}>{name}</span>
-                            <span style={styles.allocCount}>{count} ({share}%)</span>
+                            <span style={{ ...styles.allocCount, color: col }}>{count} ({share}%)</span>
                           </div>
                           <div style={styles.progressTrack}>
                             <div
                               style={{
                                 ...styles.progressFill,
                                 width: `${share}%`,
-                                background: 'linear-gradient(90deg, #8ab4f8 0%, #c084fc 100%)',
+                                background: `linear-gradient(90deg, ${col} 0%, #ffffff 100%)`,
                               }}
                             />
                           </div>
@@ -229,29 +374,39 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
               </div>
             </WobbleCard>
 
-            {/* Card 3: Model Capability vs Latency Tradeoff Radar Grid */}
-            <WobbleCard containerClassName="col-span-1 lg:col-span-3 min-h-[320px] bg-neutral-900 border border-white/10">
+            {/* Card 3: Dynamic Model Capabilities Matrix (Solid Vibrant Blue / Navy Card) */}
+            <WobbleCard
+              containerClassName="col-span-1 lg:col-span-3 min-h-[320px]"
+              style={{
+                background: 'linear-gradient(135deg, #172554 0%, #1e3a8a 50%, #172554 100%)',
+                border: '1px solid rgba(96, 165, 250, 0.3)',
+                boxShadow: '0 20px 40px rgba(23, 37, 84, 0.45)',
+              }}
+            >
               <div style={styles.cardInner}>
                 <div style={styles.cardHeader}>
                   <div>
-                    <h2 style={styles.cardTitle}>Registered Engines: Capability vs Latency Matrix</h2>
-                    <p style={styles.cardDesc}>Visual intelligence matrix comparing model power, speed benchmark, and context window limits</p>
+                    <h2 style={styles.cardTitle}>Registered Engines: Live Benchmark Matrix</h2>
+                    <p style={styles.cardDesc}>All specifications and measured performance synchronizing live from backend</p>
                   </div>
-                  <span style={styles.tagBadge}>Radar Matrix</span>
+                  <span style={{ ...styles.tagBadge, background: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.3)', color: '#fff' }}>
+                    Backend Synced
+                  </span>
                 </div>
 
                 <div style={styles.matrixGrid}>
-                  {models.map((m) => {
+                  {models.map((m, idx) => {
                     const avgLat = modelLatencyMap[m.model_key]?.count
                       ? Math.round(modelLatencyMap[m.model_key].total / modelLatencyMap[m.model_key].count)
                       : m.avg_latency_ms;
                     const capPct = (m.capability_score / 10) * 100;
                     const contextK = Math.round(m.context_length / 1024);
+                    const col = modelColors[idx % modelColors.length];
 
                     return (
                       <div key={m.model_key} style={styles.matrixCard}>
                         <div style={styles.matrixTop}>
-                          <span style={styles.matrixName}>{m.name}</span>
+                          <span style={{ ...styles.matrixName, color: col }}>{m.name}</span>
                           <span style={styles.matrixRole}>{m.role}</span>
                         </div>
 
@@ -262,7 +417,7 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
                             <span style={styles.matrixStatVal}>{m.capability_score}/10</span>
                           </div>
                           <div style={styles.progressTrack}>
-                            <div style={{ ...styles.progressFill, width: `${capPct}%`, background: '#8ab4f8' }} />
+                            <div style={{ ...styles.progressFill, width: `${capPct}%`, background: col }} />
                           </div>
                         </div>
 
@@ -285,9 +440,9 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
 
                         <div style={styles.matrixFooterRow}>
                           <span style={styles.matrixPill}>Context: {contextK}K</span>
-                          <span style={styles.matrixPill}>Cost: ${(m.cost_per_1k_tokens / 1000).toFixed(4)}/tok</span>
-                          <span style={{ ...styles.matrixPill, color: m.availability ? '#34d399' : '#f87171' }}>
-                            {m.availability ? 'Online' : 'Offline'}
+                          <span style={styles.matrixPill}>Cost: ${(m.cost_per_1k_tokens / 1000).toFixed(5)}/tok</span>
+                          <span style={{ ...styles.matrixPill, color: m.availability && m.enabled ? '#34d399' : '#f87171' }}>
+                            {m.availability && m.enabled ? 'Online' : 'Offline'}
                           </span>
                         </div>
                       </div>
@@ -298,12 +453,12 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
             </WobbleCard>
           </div>
 
-          {/* Historical Audit Trail Table */}
+          {/* Historical Audit Trail Table with solid card theme */}
           <div style={styles.tableCard}>
             <div style={styles.tableTop}>
               <div>
                 <h3 style={styles.tableTitle}>Inference Logs & Execution Audit</h3>
-                <p style={styles.tableSub}>Complete chronological trace of prompt routing decisions</p>
+                <p style={styles.tableSub}>Complete chronological trace of prompt routing decisions from gateway backend</p>
               </div>
             </div>
 
@@ -318,7 +473,7 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
               </div>
 
               {loading ? (
-                <div style={styles.tableEmpty}>Loading historical audit records…</div>
+                <div style={styles.tableEmpty}>Loading historical audit records from backend…</div>
               ) : logs.length === 0 ? (
                 <div style={styles.tableEmpty}>No audit events yet. Try sending a prompt from the main chat.</div>
               ) : (
@@ -352,7 +507,7 @@ export default function DetailedAnalysisPage({ models, onBack }: Props) {
                           <span
                             style={{
                               ...styles.statusTag,
-                              background: isOk ? 'rgba(52,211,153,0.14)' : 'rgba(248,113,113,0.14)',
+                              background: isOk ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
                               color: isOk ? '#34d399' : '#f87171',
                             }}
                           >
@@ -397,17 +552,16 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '16px 28px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-    background: 'rgba(18, 19, 22, 0.8)',
-    backdropFilter: 'blur(16px)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    background: '#121316',
     flexShrink: 0,
   },
   headerLeft: {
@@ -419,8 +573,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 8,
-    background: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
     color: '#e3e3e3',
     padding: '8px 14px',
     borderRadius: 10,
@@ -432,7 +586,7 @@ const styles: Record<string, React.CSSProperties> = {
   dividerV: {
     width: 1,
     height: 32,
-    background: 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(255, 255, 255, 0.12)',
   },
   brandRow: {
     display: 'flex',
@@ -465,12 +619,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 7,
-    background: 'rgba(52, 211, 153, 0.1)',
-    border: '1px solid rgba(52, 211, 153, 0.25)',
+    background: 'rgba(52, 211, 153, 0.14)',
+    border: '1px solid rgba(52, 211, 153, 0.3)',
     color: '#34d399',
     fontSize: 11,
     fontWeight: 500,
-    padding: '5px 10px',
+    padding: '5px 12px',
     borderRadius: 20,
   },
   pulseDot: {
@@ -497,14 +651,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
   statCard: {
-    background: 'rgba(28, 29, 34, 0.75)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    background: '#18191d',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: 16,
     padding: '18px 20px',
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+    boxShadow: '0 6px 24px rgba(0, 0, 0, 0.4)',
   },
   statLabel: {
     fontSize: 11,
@@ -526,14 +680,14 @@ const styles: Record<string, React.CSSProperties> = {
   wobbleGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-    gap: 18,
+    gap: 20,
   },
   cardInner: {
-    padding: '24px',
+    padding: '26px',
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    gap: 16,
+    gap: 18,
   },
   cardHeader: {
     display: 'flex',
@@ -542,23 +696,21 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: '#f5f5f5',
+    fontSize: 17,
+    fontWeight: 700,
+    color: '#ffffff',
     margin: 0,
+    letterSpacing: '-0.01em',
   },
   cardDesc: {
     fontSize: 12,
-    color: '#9aa0a6',
+    color: 'rgba(255, 255, 255, 0.75)',
     margin: '4px 0 0',
   },
   tagBadge: {
     fontSize: 10,
     fontWeight: 600,
-    color: '#8ab4f8',
-    background: 'rgba(138, 180, 248, 0.12)',
-    border: '1px solid rgba(138, 180, 248, 0.25)',
-    padding: '3px 8px',
+    padding: '4px 9px',
     borderRadius: 6,
     textTransform: 'uppercase',
   },
@@ -567,70 +719,78 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#71767b',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 13,
     padding: '30px 0',
   },
-  trendGraphContainer: {
-    flex: 1,
+  radarLayout: {
     display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-    minHeight: 180,
-  },
-  barsRow: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: 12,
-    height: 180,
-    paddingTop: 24,
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-  },
-  barCol: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 24,
+    minHeight: 280,
   },
-  barValueText: {
-    fontSize: 10,
-    color: '#8ab4f8',
-    fontWeight: 600,
-    fontFamily: 'monospace',
-  },
-  barTrack: {
-    width: '100%',
-    maxWidth: 28,
-    flex: 1,
+  radarSvgWrap: {
     display: 'flex',
-    alignItems: 'flex-end',
-    background: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 6,
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px',
   },
-  barFill: {
-    width: '100%',
-    borderRadius: '6px 6px 0 0',
-    transition: 'height 0.3s ease',
+  radarLegend: {
+    flex: 1,
+    minWidth: 220,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    background: 'rgba(0, 0, 0, 0.25)',
+    padding: '14px 16px',
+    borderRadius: 14,
+    border: '1px solid rgba(255, 255, 255, 0.1)',
   },
-  barLabelText: {
-    fontSize: 10,
-    color: '#71767b',
+  legendTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#fef08a',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  legendItems: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  legendName: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#ffffff',
+  },
+  legendSub: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   allocationList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 14,
+    gap: 16,
     flex: 1,
     justifyContent: 'center',
   },
   allocationRow: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 5,
+    gap: 6,
   },
   allocHeader: {
     display: 'flex',
@@ -638,40 +798,39 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
   },
   allocName: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: '#e3e3e3',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#ffffff',
   },
   allocCount: {
-    fontSize: 12,
-    color: '#8ab4f8',
-    fontWeight: 600,
+    fontSize: 13,
+    fontWeight: 700,
   },
   progressTrack: {
     width: '100%',
-    height: 6,
-    background: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 3,
+    height: 7,
+    background: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
     transition: 'width 0.4s ease',
   },
   matrixGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-    gap: 14,
+    gap: 16,
   },
   matrixCard: {
-    background: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: 12,
-    padding: '14px',
+    background: 'rgba(0, 0, 0, 0.25)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 14,
+    padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 14,
   },
   matrixTop: {
     display: 'flex',
@@ -679,18 +838,17 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 2,
   },
   matrixName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#f0f0f0',
+    fontSize: 15,
+    fontWeight: 700,
   },
   matrixRole: {
-    fontSize: 11,
-    color: '#9aa0a6',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   matrixStatGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 5,
+    gap: 6,
   },
   matrixStatRow: {
     display: 'flex',
@@ -699,33 +857,34 @@ const styles: Record<string, React.CSSProperties> = {
   },
   matrixStatKey: {
     fontSize: 11,
-    color: '#9aa0a6',
+    color: 'rgba(255, 255, 255, 0.75)',
   },
   matrixStatVal: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#8ab4f8',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#ffffff',
   },
   matrixFooterRow: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: 6,
-    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-    paddingTop: 8,
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingTop: 10,
   },
   matrixPill: {
     fontSize: 10,
-    background: 'rgba(255, 255, 255, 0.05)',
-    color: '#c4c7c5',
-    padding: '2px 6px',
+    background: 'rgba(0, 0, 0, 0.35)',
+    color: '#ffffff',
+    padding: '3px 7px',
     borderRadius: 4,
+    fontWeight: 500,
   },
   tableCard: {
-    background: 'rgba(28, 29, 34, 0.8)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    background: '#18191d',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: 16,
     overflow: 'hidden',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
   },
   tableTop: {
     padding: '18px 24px',
@@ -749,8 +908,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     padding: '12px 24px',
-    background: 'rgba(0, 0, 0, 0.25)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+    background: 'rgba(0, 0, 0, 0.3)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
     fontSize: 11,
     fontWeight: 600,
     color: '#9aa0a6',

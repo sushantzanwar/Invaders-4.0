@@ -62,6 +62,7 @@ export default function MessageBubble({ message }: Props) {
       style={{
         ...styles.row,
         justifyContent: isUser ? 'flex-end' : 'flex-start',
+        alignItems: 'center',
         animation: 'fadeSlideUp 0.3s ease',
       }}
     >
@@ -166,22 +167,24 @@ function UserIcon() {
 const styles: Record<string, React.CSSProperties> = {
   row: {
     display: 'flex',
-    alignItems: 'flex-end',
-    gap: 10,
-    padding: '4px 28px',
+    alignItems: 'center',
+    gap: 12,
+    padding: '6px 28px',
     maxWidth: '100%',
   },
   aiAvatar: {
     width: 32,
     height: 32,
     borderRadius: '50%',
-    background: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: '#18191c',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+    alignSelf: 'center',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.35)',
+    overflow: 'hidden',
   },
   userAvatar: {
     width: 30,
